@@ -1,0 +1,696 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Rodokmen</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet" />
+  <script src="https://d3js.org/d3.v7.min.js"></script>
+
+  <style>
+    /* ── Tokens ─────────────────────────────────────────── */
+    :root {
+      --bg:         #FAFAF8;
+      --bg2:        #F0EDE6;
+      --card:       #FFFFFF;
+      --border:     #E0D8CC;
+      --text:       #1A1A2E;
+      --text2:      #6B6470;
+      --accent:     #8B6F47;
+      --accent2:    #C4A882;
+      --link:       #4A7FC1;
+      --female:     #C4748A;
+      --male:       #4A7FC1;
+      --unknown:    #8B8B8B;
+      --shadow:     0 2px 12px rgba(0,0,0,.08);
+      --shadow-lg:  0 8px 32px rgba(0,0,0,.14);
+      --radius:     10px;
+      --panel:      360px;
+      --transition: .25s ease;
+    }
+    [data-theme="dark"] {
+      --bg:         #0F0F1A;
+      --bg2:        #1A1A2E;
+      --card:       #1E1E30;
+      --border:     #2E2E44;
+      --text:       #E8E0D0;
+      --text2:      #9A9090;
+      --accent:     #C4A882;
+      --accent2:    #8B6F47;
+      --link:       #6A9FD1;
+      --female:     #D4849A;
+      --male:       #6A9FD1;
+      --shadow:     0 2px 12px rgba(0,0,0,.3);
+      --shadow-lg:  0 8px 32px rgba(0,0,0,.5);
+    }
+
+    /* ── Reset ──────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; font-family: 'Inter', sans-serif; background: var(--bg); color: var(--text); transition: background var(--transition), color var(--transition); }
+
+    /* ── Login screen ───────────────────────────────────── */
+    #login-screen {
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      height: 100vh; gap: 32px; padding: 24px;
+    }
+    #login-screen h1 {
+      font-family: 'Playfair Display', serif; font-size: clamp(2rem, 5vw, 3.2rem);
+      font-weight: 700; color: var(--accent); letter-spacing: -.5px; text-align: center;
+    }
+    #login-screen p { color: var(--text2); font-size: .95rem; text-align: center; max-width: 320px; line-height: 1.6; }
+    .login-btn {
+      display: flex; align-items: center; gap: 12px; padding: 14px 28px;
+      background: var(--card); border: 1.5px solid var(--border); border-radius: 50px;
+      font-size: 1rem; font-weight: 500; color: var(--text); cursor: pointer;
+      box-shadow: var(--shadow); transition: box-shadow var(--transition), transform var(--transition);
+    }
+    .login-btn:hover { box-shadow: var(--shadow-lg); transform: translateY(-1px); }
+    .login-btn svg { width: 20px; height: 20px; }
+    #login-error { color: #c0392b; font-size: .88rem; text-align: center; display: none; }
+
+    /* ── App shell ──────────────────────────────────────── */
+    #app { display: none; height: 100vh; flex-direction: column; }
+    #app.visible { display: flex; }
+
+    /* ── Top bar ────────────────────────────────────────── */
+    #topbar {
+      display: flex; align-items: center; gap: 12px; padding: 0 20px;
+      height: 56px; border-bottom: 1px solid var(--border);
+      background: var(--card); box-shadow: var(--shadow); z-index: 10; flex-shrink: 0;
+    }
+    #topbar h1 { font-family: 'Playfair Display', serif; font-size: 1.2rem; color: var(--accent); font-weight: 600; }
+    #topbar .spacer { flex: 1; }
+    .tb-btn {
+      background: none; border: 1px solid var(--border); border-radius: 8px;
+      padding: 6px 14px; font-size: .82rem; font-weight: 500; color: var(--text2);
+      cursor: pointer; transition: border-color var(--transition), color var(--transition);
+    }
+    .tb-btn:hover { border-color: var(--accent); color: var(--accent); }
+    #search-input {
+      padding: 7px 14px; border: 1px solid var(--border); border-radius: 8px;
+      background: var(--bg2); color: var(--text); font-size: .88rem; width: 200px;
+      outline: none; transition: border-color var(--transition);
+    }
+    #search-input:focus { border-color: var(--accent); }
+    #user-avatar {
+      width: 32px; height: 32px; border-radius: 50%; object-fit: cover;
+      border: 2px solid var(--accent2);
+    }
+
+    /* ── Filter bar ─────────────────────────────────────── */
+    #filterbar {
+      display: flex; align-items: center; gap: 8px; padding: 8px 20px;
+      border-bottom: 1px solid var(--border); background: var(--bg2); flex-shrink: 0; flex-wrap: wrap;
+    }
+    #filterbar span { font-size: .78rem; color: var(--text2); font-weight: 500; margin-right: 4px; }
+    .filter-btn {
+      padding: 4px 14px; border-radius: 20px; border: 1.5px solid var(--border);
+      font-size: .8rem; font-weight: 500; background: var(--card); color: var(--text2);
+      cursor: pointer; transition: all var(--transition);
+    }
+    .filter-btn.active, .filter-btn:hover { border-color: var(--accent); color: var(--accent); background: var(--bg); }
+
+    /* ── Main area ──────────────────────────────────────── */
+    #main { display: flex; flex: 1; overflow: hidden; }
+
+    /* ── Tree canvas ────────────────────────────────────── */
+    #tree-container {
+      flex: 1; overflow: hidden; position: relative; background: var(--bg);
+    }
+    #tree-svg { width: 100%; height: 100%; cursor: grab; }
+    #tree-svg:active { cursor: grabbing; }
+
+    /* ── Tree nodes ─────────────────────────────────────── */
+    .node-card {
+      filter: drop-shadow(0 2px 6px rgba(0,0,0,.1));
+      cursor: pointer; transition: filter .2s;
+    }
+    .node-card:hover { filter: drop-shadow(0 4px 12px rgba(0,0,0,.2)); }
+    .node-rect {
+      rx: 8; ry: 8; fill: var(--card); stroke-width: 1.5;
+    }
+    .node-name {
+      font-family: 'Playfair Display', serif; font-size: 13px;
+      font-weight: 600; fill: var(--text);
+    }
+    .node-years { font-family: 'Inter', sans-serif; font-size: 10px; fill: var(--text2); }
+    .node-highlighted .node-rect { stroke-width: 2.5; }
+    .node-dimmed { opacity: .25; }
+    .link { fill: none; stroke: var(--border); stroke-width: 1.5; }
+    .link-highlighted { stroke: var(--accent); stroke-width: 2; }
+
+    /* ── Detail panel ───────────────────────────────────── */
+    #detail-panel {
+      width: var(--panel); border-left: 1px solid var(--border);
+      background: var(--card); overflow-y: auto; flex-shrink: 0;
+      transform: translateX(100%); transition: transform var(--transition);
+      position: relative;
+    }
+    #detail-panel.open { transform: translateX(0); }
+    #panel-close {
+      position: absolute; top: 14px; right: 14px; background: none; border: none;
+      font-size: 1.2rem; cursor: pointer; color: var(--text2); line-height: 1;
+    }
+    #panel-close:hover { color: var(--text); }
+    #panel-content { padding: 28px 24px 40px; }
+    .panel-sex-bar {
+      height: 4px; border-radius: 2px; margin-bottom: 20px;
+    }
+    .panel-name {
+      font-family: 'Playfair Display', serif; font-size: 1.5rem;
+      font-weight: 700; color: var(--text); line-height: 1.2; margin-bottom: 4px;
+    }
+    .panel-maiden { font-size: .85rem; color: var(--text2); margin-bottom: 16px; }
+    .panel-section { margin-top: 20px; }
+    .panel-label { font-size: .7rem; font-weight: 600; color: var(--accent); letter-spacing: .08em; text-transform: uppercase; margin-bottom: 6px; }
+    .panel-value { font-size: .9rem; color: var(--text); line-height: 1.5; }
+    .panel-divider { border: none; border-top: 1px solid var(--border); margin: 20px 0; }
+    .panel-link-list { display: flex; flex-direction: column; gap: 6px; margin-top: 6px; }
+    .panel-person-link {
+      display: flex; align-items: center; gap: 8px; padding: 8px 12px;
+      border-radius: 8px; background: var(--bg2); cursor: pointer;
+      font-size: .85rem; color: var(--text); transition: background var(--transition);
+      border: none; text-align: left; width: 100%;
+    }
+    .panel-person-link:hover { background: var(--border); }
+    .panel-person-link .dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+
+    /* ── Loading ─────────────────────────────────────────── */
+    #loading {
+      display: none; position: fixed; inset: 0; background: var(--bg);
+      align-items: center; justify-content: center; z-index: 100; flex-direction: column; gap: 16px;
+    }
+    #loading.visible { display: flex; }
+    .spinner {
+      width: 40px; height: 40px; border: 3px solid var(--border);
+      border-top-color: var(--accent); border-radius: 50%; animation: spin .8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Zoom controls ───────────────────────────────────── */
+    #zoom-controls {
+      position: absolute; bottom: 20px; right: 20px; display: flex; flex-direction: column; gap: 6px;
+    }
+    .zoom-btn {
+      width: 36px; height: 36px; border-radius: 8px; border: 1px solid var(--border);
+      background: var(--card); color: var(--text); font-size: 1.1rem; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      box-shadow: var(--shadow); transition: border-color var(--transition);
+    }
+    .zoom-btn:hover { border-color: var(--accent); }
+
+    /* ── Empty / error states ────────────────────────────── */
+    .state-msg {
+      position: absolute; inset: 0; display: flex; flex-direction: column;
+      align-items: center; justify-content: center; gap: 12px;
+      color: var(--text2); font-size: .95rem; text-align: center; padding: 24px;
+    }
+    .state-msg .icon { font-size: 2.5rem; }
+  </style>
+</head>
+<body>
+
+<!-- ── Loading overlay ───────────────────────────────────── -->
+<div id="loading" class="visible">
+  <div class="spinner"></div>
+  <span style="color:var(--text2);font-size:.9rem;">Načítám…</span>
+</div>
+
+<!-- ── Login screen ──────────────────────────────────────── -->
+<div id="login-screen" style="display:none;">
+  <h1>Náš rodokmen</h1>
+  <p>Soukromý archiv dvou rodin.<br>Přihlaste se svým Google účtem.</p>
+  <button class="login-btn" id="google-login-btn">
+    <svg viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.18 1.48-4.97 2.31-8.16 2.31-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
+    Přihlásit se přes Google
+  </button>
+  <p id="login-error">Přístup povolen pouze pro oprávněné účty.</p>
+</div>
+
+<!-- ── App ───────────────────────────────────────────────── -->
+<div id="app">
+  <div id="topbar">
+    <h1>Rodokmen</h1>
+    <input id="search-input" type="search" placeholder="Hledat osobu…" />
+    <div class="spacer"></div>
+    <button class="tb-btn" id="reset-btn">Celý strom</button>
+    <button class="tb-btn" id="theme-btn">🌙 Tmavý</button>
+    <img id="user-avatar" src="" alt="avatar" style="display:none;" />
+    <button class="tb-btn" id="logout-btn">Odhlásit</button>
+  </div>
+
+  <div id="filterbar">
+    <span>Zobrazit:</span>
+    <button class="filter-btn active" data-filter="all">Celý strom</button>
+    <button class="filter-btn" data-filter="ancestors">Přímá linie</button>
+    <button class="filter-btn" data-filter="r1">Rod 1</button>
+    <button class="filter-btn" data-filter="r2">Rod 2</button>
+  </div>
+
+  <div id="main">
+    <div id="tree-container">
+      <svg id="tree-svg"></svg>
+      <div id="zoom-controls">
+        <button class="zoom-btn" id="zoom-in">+</button>
+        <button class="zoom-btn" id="zoom-fit">⊙</button>
+        <button class="zoom-btn" id="zoom-out">−</button>
+      </div>
+    </div>
+    <div id="detail-panel">
+      <button id="panel-close">✕</button>
+      <div id="panel-content"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ── Firebase ──────────────────────────────────────────── -->
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged }
+  from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+import { getDatabase, ref, get }
+  from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyDzntGs5eNeCDyk5MW5CgI2H7VNkp_TPB0",
+  authDomain: "rodokmen-15b87.firebaseapp.com",
+  databaseURL: "https://rodokmen-15b87-default-rtdb.europe-west1.firebasedatabase.app",
+  projectId: "rodokmen-15b87",
+  storageBucket: "rodokmen-15b87.firebasestorage.app",
+  messagingSenderId: "115667345969",
+  appId: "1:115667345969:web:25e8cfeade49f3e7736b10",
+};
+
+const ALLOWED = ["sidney4hassane@gmail.com", "krejcarovaeliska@gmail.com"];
+
+const app     = initializeApp(firebaseConfig);
+const auth    = getAuth(app);
+const db      = getDatabase(app);
+const provider = new GoogleAuthProvider();
+
+// ── DOM refs ──────────────────────────────────────────────
+const $loading     = document.getElementById("loading");
+const $loginScreen = document.getElementById("login-screen");
+const $app         = document.getElementById("app");
+const $loginBtn    = document.getElementById("google-login-btn");
+const $loginError  = document.getElementById("login-error");
+const $logoutBtn   = document.getElementById("logout-btn");
+const $themeBtn    = document.getElementById("theme-btn");
+const $resetBtn    = document.getElementById("reset-btn");
+const $searchInput = document.getElementById("search-input");
+const $avatar      = document.getElementById("user-avatar");
+const $panel       = document.getElementById("detail-panel");
+const $panelContent= document.getElementById("panel-content");
+const $panelClose  = document.getElementById("panel-close");
+const $filterBtns  = document.querySelectorAll(".filter-btn");
+
+// ── State ─────────────────────────────────────────────────
+let allPersons  = {};
+let allFamilies = {};
+let activeFilter = "all";
+let selectedId   = null;
+let darkMode     = false;
+let svgZoom      = null;
+
+// ── Auth ──────────────────────────────────────────────────
+$loginBtn.addEventListener("click", () => signInWithPopup(auth, provider).catch(() => {}));
+$logoutBtn.addEventListener("click", () => signOut(auth));
+
+onAuthStateChanged(auth, async user => {
+  if (user) {
+    if (!ALLOWED.includes(user.email)) {
+      $loginError.style.display = "block";
+      $loginError.textContent   = `Účet ${user.email} nemá přístup.`;
+      await signOut(auth);
+      $loading.classList.remove("visible");
+      $loginScreen.style.display = "flex";
+      return;
+    }
+    // Logged in & allowed
+    if (user.photoURL) { $avatar.src = user.photoURL; $avatar.style.display = "block"; }
+    $loading.classList.add("visible");
+    $loginScreen.style.display = "none";
+    await loadData();
+    $loading.classList.remove("visible");
+    $app.classList.add("visible");
+  } else {
+    $loading.classList.remove("visible");
+    $app.classList.remove("visible");
+    $loginScreen.style.display = "flex";
+  }
+});
+
+// ── Load data ─────────────────────────────────────────────
+async function loadData() {
+  const [pSnap, fSnap] = await Promise.all([
+    get(ref(db, "persons")),
+    get(ref(db, "families")),
+  ]);
+  allPersons  = pSnap.val()  || {};
+  allFamilies = fSnap.val()  || {};
+  renderTree();
+}
+
+// ── Theme ─────────────────────────────────────────────────
+$themeBtn.addEventListener("click", () => {
+  darkMode = !darkMode;
+  document.documentElement.setAttribute("data-theme", darkMode ? "dark" : "");
+  $themeBtn.textContent = darkMode ? "☀️ Světlý" : "🌙 Tmavý";
+  renderTree();
+});
+
+// ── Filter ────────────────────────────────────────────────
+$filterBtns.forEach(btn => btn.addEventListener("click", () => {
+  $filterBtns.forEach(b => b.classList.remove("active"));
+  btn.classList.add("active");
+  activeFilter = btn.dataset.filter;
+  renderTree();
+}));
+
+$resetBtn.addEventListener("click", () => {
+  selectedId = null;
+  activeFilter = "all";
+  $filterBtns.forEach(b => b.classList.toggle("active", b.dataset.filter === "all"));
+  closePanel();
+  renderTree();
+});
+
+// ── Search ────────────────────────────────────────────────
+$searchInput.addEventListener("input", () => {
+  const q = $searchInput.value.trim().toLowerCase();
+  if (!q) { renderTree(); return; }
+  const match = Object.entries(allPersons).find(([, p]) =>
+    `${p.given_name} ${p.surname}`.toLowerCase().includes(q)
+  );
+  if (match) focusPerson(match[0]);
+});
+
+// ── Build tree data ───────────────────────────────────────
+function buildHierarchy(persons, families) {
+  // Find root candidates: people with no famc (no known parents) or oldest generation
+  const childIds = new Set();
+  Object.values(families).forEach(f => (f.children || []).forEach(c => childIds.add(c)));
+
+  // Pick person with most descendants as root, fallback to first without parents
+  let rootId = Object.keys(persons).find(id => !childIds.has(id));
+  if (!rootId) rootId = Object.keys(persons)[0];
+
+  const visited = new Set();
+
+  function buildNode(personId, depth = 0) {
+    if (visited.has(personId) || depth > 20) return null;
+    visited.add(personId);
+    const p = persons[personId];
+    if (!p) return null;
+
+    const node = {
+      id: personId,
+      name: `${p.given_name || ""} ${p.surname || ""}`.trim(),
+      data: p,
+      children: [],
+    };
+
+    // Find families where this person is parent
+    const famIds = p.fams || [];
+    famIds.forEach(famId => {
+      const fam = families[famId];
+      if (!fam) return;
+      (fam.children || []).forEach(childId => {
+        if (!visited.has(childId)) {
+          const child = buildNode(childId, depth + 1);
+          if (child) node.children.push(child);
+        }
+      });
+    });
+
+    return node;
+  }
+
+  return buildNode(rootId);
+}
+
+function getFilteredPersonIds() {
+  if (activeFilter === "r1") return new Set(Object.keys(allPersons).filter(id => id.startsWith("R1_")));
+  if (activeFilter === "r2") return new Set(Object.keys(allPersons).filter(id => id.startsWith("R2_")));
+  if (activeFilter === "ancestors" && selectedId) return getAncestors(selectedId);
+  return new Set(Object.keys(allPersons));
+}
+
+function getAncestors(personId) {
+  const ids = new Set([personId]);
+  function climb(id) {
+    const p = allPersons[id];
+    if (!p) return;
+    (p.famc || []).forEach(famId => {
+      const fam = allFamilies[famId];
+      if (!fam) return;
+      [fam.husband_id, fam.wife_id].filter(Boolean).forEach(pid => {
+        if (!ids.has(pid)) { ids.add(pid); climb(pid); }
+      });
+    });
+  }
+  climb(personId);
+  // Also add descendants
+  function descend(id) {
+    const p = allPersons[id];
+    if (!p) return;
+    (p.fams || []).forEach(famId => {
+      const fam = allFamilies[famId];
+      if (!fam) return;
+      (fam.children || []).forEach(cid => {
+        if (!ids.has(cid)) { ids.add(cid); descend(cid); }
+      });
+    });
+  }
+  descend(personId);
+  return ids;
+}
+
+// ── Render tree ───────────────────────────────────────────
+function renderTree() {
+  const svg = d3.select("#tree-svg");
+  svg.selectAll("*").remove();
+
+  const allowedIds = getFilteredPersonIds();
+  const filteredPersons = {};
+  Object.entries(allPersons).forEach(([id, p]) => {
+    if (allowedIds.has(id)) filteredPersons[id] = p;
+  });
+
+  const filteredFamilies = {};
+  Object.entries(allFamilies).forEach(([id, f]) => {
+    filteredFamilies[id] = f;
+  });
+
+  if (!Object.keys(filteredPersons).length) {
+    document.getElementById("tree-container").innerHTML +=
+      `<div class="state-msg"><div class="icon">🌳</div><p>Žádné osoby k zobrazení.</p></div>`;
+    return;
+  }
+
+  const hierarchy = buildHierarchy(filteredPersons, filteredFamilies);
+  if (!hierarchy) return;
+
+  const NODE_W = 160, NODE_H = 60, H_GAP = 40, V_GAP = 80;
+  const root = d3.hierarchy(hierarchy);
+  const treeLayout = d3.tree().nodeSize([NODE_W + H_GAP, NODE_H + V_GAP]);
+  treeLayout(root);
+
+  const container = document.getElementById("tree-container");
+  const W = container.clientWidth;
+  const H = container.clientHeight;
+
+  const g = svg.append("g");
+
+  // Zoom behaviour
+  svgZoom = d3.zoom().scaleExtent([.05, 2]).on("zoom", e => g.attr("transform", e.transform));
+  svg.call(svgZoom);
+
+  // Links
+  g.selectAll(".link")
+    .data(root.links())
+    .join("path")
+    .attr("class", "link")
+    .attr("d", d3.linkVertical().x(d => d.x).y(d => d.y));
+
+  // Nodes
+  const node = g.selectAll(".node-card")
+    .data(root.descendants())
+    .join("g")
+    .attr("class", "node-card")
+    .attr("transform", d => `translate(${d.x - NODE_W/2},${d.y - NODE_H/2})`)
+    .on("click", (_, d) => selectPerson(d.data.id));
+
+  const getStroke = d => {
+    const sex = d.data.data?.sex;
+    if (sex === "M") return "var(--male)";
+    if (sex === "F") return "var(--female)";
+    return "var(--unknown)";
+  };
+
+  node.append("rect")
+    .attr("class", "node-rect")
+    .attr("width", NODE_W).attr("height", NODE_H)
+    .attr("rx", 8).attr("ry", 8)
+    .style("fill", "var(--card)")
+    .style("stroke", getStroke);
+
+  node.append("text")
+    .attr("class", "node-name")
+    .attr("x", NODE_W / 2).attr("y", 22)
+    .attr("text-anchor", "middle")
+    .text(d => {
+      const name = d.data.name;
+      return name.length > 20 ? name.slice(0, 19) + "…" : name;
+    });
+
+  node.append("text")
+    .attr("class", "node-years")
+    .attr("x", NODE_W / 2).attr("y", 40)
+    .attr("text-anchor", "middle")
+    .text(d => {
+      const p = d.data.data;
+      const b = p.birth_date ? p.birth_date.split(" ").pop() : "?";
+      const died = p.death ? (p.death.split(" ").pop() || "†") : "";
+      return died ? `${b} – ${died}` : b;
+    });
+
+  // Highlight selected
+  if (selectedId) {
+    node.each(function(d) {
+      if (d.data.id === selectedId) {
+        d3.select(this).select("rect").style("stroke-width", "3").style("stroke", "var(--accent)");
+      }
+    });
+  }
+
+  // Fit to view
+  fitTree(root, W, H, NODE_W, NODE_H);
+}
+
+function fitTree(root, W, H, NW, NH) {
+  const nodes = root.descendants();
+  const xs = nodes.map(d => d.x);
+  const ys = nodes.map(d => d.y);
+  const minX = Math.min(...xs) - NW/2 - 20;
+  const maxX = Math.max(...xs) + NW/2 + 20;
+  const minY = Math.min(...ys) - NH/2 - 20;
+  const maxY = Math.max(...ys) + NH/2 + 20;
+  const scale = Math.min(.9, Math.min(W / (maxX - minX), H / (maxY - minY)));
+  const tx = W/2 - scale*(minX + maxX)/2;
+  const ty = H/2 - scale*(minY + maxY)/2;
+  d3.select("#tree-svg").call(svgZoom.transform, d3.zoomIdentity.translate(tx, ty).scale(scale));
+}
+
+// ── Zoom controls ─────────────────────────────────────────
+document.getElementById("zoom-in").addEventListener("click",  () => d3.select("#tree-svg").call(svgZoom.scaleBy, 1.3));
+document.getElementById("zoom-out").addEventListener("click", () => d3.select("#tree-svg").call(svgZoom.scaleBy, 0.77));
+document.getElementById("zoom-fit").addEventListener("click", renderTree);
+
+// ── Select person ─────────────────────────────────────────
+function selectPerson(id) {
+  selectedId = id;
+  renderTree();
+  openPanel(id);
+}
+
+function focusPerson(id) {
+  selectedId = id;
+  openPanel(id);
+  renderTree();
+}
+
+// ── Detail panel ──────────────────────────────────────────
+function openPanel(id) {
+  const p = allPersons[id];
+  if (!p) return;
+
+  const sexColor = p.sex === "M" ? "var(--male)" : p.sex === "F" ? "var(--female)" : "var(--unknown)";
+  const fullName = `${p.given_name || ""} ${p.surname || ""}`.trim();
+
+  // Collect family info
+  const partners = [];
+  const children = [];
+  (p.fams || []).forEach(famId => {
+    const fam = allFamilies[famId];
+    if (!fam) return;
+    const partnerId = p.sex === "M" ? fam.wife_id : fam.husband_id;
+    if (partnerId && allPersons[partnerId]) partners.push({ id: partnerId, p: allPersons[partnerId] });
+    (fam.children || []).forEach(cid => {
+      if (allPersons[cid]) children.push({ id: cid, p: allPersons[cid] });
+    });
+  });
+
+  const parents = [];
+  (p.famc || []).forEach(famId => {
+    const fam = allFamilies[famId];
+    if (!fam) return;
+    [fam.husband_id, fam.wife_id].filter(Boolean).forEach(pid => {
+      if (allPersons[pid]) parents.push({ id: pid, p: allPersons[pid] });
+    });
+  });
+
+  function personLink(item) {
+    const color = item.p.sex === "M" ? "var(--male)" : item.p.sex === "F" ? "var(--female)" : "var(--unknown)";
+    return `<button class="panel-person-link" data-id="${item.id}">
+      <span class="dot" style="background:${color}"></span>
+      ${item.p.given_name || ""} ${item.p.surname || ""}
+    </button>`;
+  }
+
+  $panelContent.innerHTML = `
+    <div class="panel-sex-bar" style="background:${sexColor}"></div>
+    <div class="panel-name">${fullName}</div>
+    ${p.maiden_name ? `<div class="panel-maiden">rozená ${p.maiden_name}</div>` : ""}
+
+    ${p.birth_date || p.birth_place ? `
+    <div class="panel-section">
+      <div class="panel-label">Narození</div>
+      <div class="panel-value">${[p.birth_date, p.birth_place].filter(Boolean).join(" · ")}</div>
+    </div>` : ""}
+
+    ${p.death ? `
+    <div class="panel-section">
+      <div class="panel-label">Úmrtí</div>
+      <div class="panel-value">${p.death === "Y" ? "†" : p.death}</div>
+    </div>` : ""}
+
+    <hr class="panel-divider" />
+
+    ${parents.length ? `
+    <div class="panel-section">
+      <div class="panel-label">Rodiče</div>
+      <div class="panel-link-list">${parents.map(personLink).join("")}</div>
+    </div>` : ""}
+
+    ${partners.length ? `
+    <div class="panel-section">
+      <div class="panel-label">Partner / partnerka</div>
+      <div class="panel-link-list">${partners.map(personLink).join("")}</div>
+    </div>` : ""}
+
+    ${children.length ? `
+    <div class="panel-section">
+      <div class="panel-label">Děti (${children.length})</div>
+      <div class="panel-link-list">${children.map(personLink).join("")}</div>
+    </div>` : ""}
+
+    <div class="panel-section">
+      <div class="panel-label">Zdroj</div>
+      <div class="panel-value">${p.source === "R1" ? "Rod 1" : "Rod 2"}</div>
+    </div>
+  `;
+
+  $panelContent.querySelectorAll(".panel-person-link").forEach(btn => {
+    btn.addEventListener("click", () => selectPerson(btn.dataset.id));
+  });
+
+  $panel.classList.add("open");
+}
+
+function closePanel() { $panel.classList.remove("open"); }
+$panelClose.addEventListener("click", closePanel);
+</script>
+</body>
+</html>
