@@ -607,7 +607,9 @@ function openPanel(id) {
   if (!p) return;
 
   const sexColor = p.sex === "M" ? "var(--male)" : p.sex === "F" ? "var(--female)" : "var(--unknown)";
-  const fullName = `${p.given_name || ""} ${p.surname || ""}`.trim();
+  const fullName = p.sex === "F" && p.maiden_name
+    ? `${p.given_name || ""} ${p.maiden_name || ""}`.trim()
+    : `${p.given_name || ""} ${p.surname || ""}`.trim();
 
   // Collect family info
   const partners = [];
@@ -642,7 +644,7 @@ function openPanel(id) {
   $panelContent.innerHTML = `
     <div class="panel-sex-bar" style="background:${sexColor}"></div>
     <div class="panel-name">${fullName}</div>
-    ${p.maiden_name ? `<div class="panel-maiden">rozená ${p.maiden_name}</div>` : ""}
+    ${p.maiden_name ? `<div class="panel-maiden">rozená ${p.surname}</div>` : ""}
 
     ${p.birth_date || p.birth_place ? `
     <div class="panel-section">
