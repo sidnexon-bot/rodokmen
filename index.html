@@ -130,6 +130,7 @@
       <div id="search-results"></div>
     </div>
     <div class="spacer"></div>
+    <button class="tb-btn" id="lineage-btn">🌿 Přímá linie</button>
     <button class="tb-btn" id="theme-btn">🌙 Tmavý</button>
     <img id="user-avatar" src="" alt="" style="display:none;" />
     <button class="tb-btn" id="logout-btn">Odhlásit</button>
@@ -182,6 +183,7 @@ const $loginBtn     = document.getElementById("google-login-btn");
 const $loginError   = document.getElementById("login-error");
 const $logoutBtn    = document.getElementById("logout-btn");
 const $themeBtn     = document.getElementById("theme-btn");
+const $lineageBtn   = document.getElementById("lineage-btn");
 const $searchInput  = document.getElementById("search-input");
 const $searchRes    = document.getElementById("search-results");
 const $avatar       = document.getElementById("user-avatar");
@@ -195,6 +197,7 @@ let allFamilies = {};
 let focusId     = null;
 let history     = [];   // navigation history for breadcrumb
 let darkMode    = false;
+let lineageMode = false;
 let zoomBehavior = null;
 
 // Node dimensions
@@ -246,6 +249,16 @@ $themeBtn.addEventListener("click", () => {
   document.documentElement.setAttribute("data-theme", darkMode ? "dark" : "");
   $themeBtn.textContent = darkMode ? "☀️ Světlý" : "🌙 Tmavý";
   renderTree();
+});
+
+// ── Lineage mode ───────────────────────────────────────────
+$lineageBtn.addEventListener("click", () => {
+  lineageMode = !lineageMode;
+  $lineageBtn.style.borderColor = lineageMode ? "var(--accent)" : "";
+  $lineageBtn.style.color = lineageMode ? "var(--accent)" : "";
+  $lineageBtn.textContent = lineageMode ? "🌿 Zpět na detail" : "🌿 Přímá linie";
+  if (lineageMode) renderLineage();
+  else renderTree();
 });
 
 // ── Search ────────────────────────────────────────────────
@@ -583,6 +596,121 @@ function fitView(pos, W, H) {
   const tx = W/2 - scale*(minX+maxX)/2;
   const ty = H/2 - scale*(minY+maxY)/2;
   d3.select("#tree-svg").call(zoomBehavior.transform, d3.zoomIdentity.translate(tx,ty).scale(scale));
+}
+
+
+// ── Render lineage (all direct ancestors) ─────────────────
+function renderLineage() {
+  const svg = d3.select("#tree-svg");
+  svg.selectAll("*").remove();
+  if (!focusId || !allPersons[focusId]) return;
+
+  // Collect all ancestors
+  const ancestors = {};
+  function climb(id, gen) {
+    if (!allPersons[id] || ancestors[id]) return;
+    ancestors[id] = { id, p: allPersons[id], gen };
+    getParents(id).forEach(pid => climb(pid, gen + 1));
+  }
+  climb(focusId, 0);
+
+  // Group by generation
+  const byGen = {};
+  Object.values(ancestors).forEach(n => {
+    if (!byGen[n.gen]) byGen[n.gen] = [];
+    byGen[n.gen].push(n);
+  });
+
+  const maxGen = Math.max(...Object.keys(byGen).map(Number));
+  const pos = {};
+
+  // Assign positions — gen 0 (focus) at bottom, maxGen at top
+  for (let g = 0; g <= maxGen; g++) {
+    const row = byGen[g] || [];
+    const totalW = row.length * (NW + HGAP) - HGAP;
+    row.forEach((n, i) => {
+      pos[n.id] = {
+        x: -totalW/2 + i * (NW + HGAP),
+        y: -g * (NH + VGAP),
+      };
+    });
+  }
+
+  const container = document.getElementById("tree-container");
+  const W = container.clientWidth;
+  const H = container.clientHeight;
+
+  const g = svg.append("g");
+  zoomBehavior = d3.zoom().scaleExtent([.02, 2]).on("zoom", e => g.attr("transform", e.transform));
+  svg.call(zoomBehavior);
+
+  // Generation labels
+  const genLabels = { 0:"Vy", 1:"Rodiče", 2:"Prarodiče", 3:"Praprarodiče", 4:"Prapraprarodiče" };
+  Object.keys(byGen).forEach(gen => {
+    const y = -parseInt(gen) * (NH + VGAP);
+    const label = genLabels[gen] || `Generace -${gen}`;
+    g.append("text")
+      .attr("x", -800).attr("y", y + NH/2 + 4)
+      .attr("text-anchor","end")
+      .style("font-family","Inter,sans-serif").style("font-size","11px")
+      .style("fill","var(--text2)").style("font-weight","500")
+      .text(label);
+  });
+
+  // Edges
+  Object.values(ancestors).forEach(({ id }) => {
+    getParents(id).forEach(pid => {
+      if (!pos[id] || !pos[pid]) return;
+      const fx = pos[id].x + NW/2,  fy = pos[id].y;
+      const px = pos[pid].x + NW/2, py = pos[pid].y + NH;
+      const my = py + (fy - py) * 0.5;
+      g.append("path").attr("fill","none")
+        .attr("d", `M${px},${py} C${px},${my} ${fx},${my} ${fx},${fy}`)
+        .style("stroke","var(--border)").style("stroke-width",1.5);
+    });
+  });
+
+  // Nodes
+  Object.values(ancestors).forEach(({ id, p, gen }) => {
+    if (!pos[id]) return;
+    const { x, y } = pos[id];
+    const isFocus = id === focusId;
+    const color = sexColor(p.sex);
+    const displayName = getDisplayName(p);
+    const shortName = displayName.length > 19 ? displayName.slice(0,18)+"…" : displayName;
+    const by = getYear(p.birth_date);
+    const dy = p.death === "Y" ? "†" : getYear(p.death);
+    const years = dy ? `${by}–${dy}` : by;
+
+    const ng = g.append("g").attr("class","node-g")
+      .attr("transform", `translate(${x},${y})`)
+      .on("click", () => { lineageMode = false; $lineageBtn.style.borderColor = ""; $lineageBtn.style.color = ""; $lineageBtn.textContent = "🌿 Přímá linie"; navigateTo(id); });
+
+    ng.append("rect")
+      .attr("width",NW).attr("height",NH).attr("rx",10).attr("ry",10)
+      .style("fill", isFocus ? "var(--accent)" : "var(--card)")
+      .style("stroke", isFocus ? "var(--accent)" : color)
+      .style("stroke-width", isFocus ? 0 : 1.5)
+      .style("filter","drop-shadow(0 2px 8px rgba(0,0,0,.10))");
+
+    if (!isFocus) {
+      ng.append("rect").attr("width",NW).attr("height",4).attr("rx",4).attr("ry",4)
+        .style("fill",color).style("pointer-events","none");
+    }
+
+    ng.append("text").attr("class","node-name")
+      .attr("x",NW/2).attr("y",28).attr("text-anchor","middle")
+      .style("fill", isFocus ? "#fff" : "var(--text)")
+      .text(shortName);
+
+    ng.append("text").attr("class","node-years")
+      .attr("x",NW/2).attr("y",46).attr("text-anchor","middle")
+      .style("fill", isFocus ? "rgba(255,255,255,.75)" : "var(--text2)")
+      .text(years);
+  });
+
+  fitView(pos, W, H);
+  updateBreadcrumb();
 }
 
 // ── Navigation ────────────────────────────────────────────
