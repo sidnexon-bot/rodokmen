@@ -4,6 +4,10 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Rodokmen</title>
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="apple-mobile-web-app-title" content="Rodokmen" />
+  <meta name="theme-color" content="#8B6F47" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet" />
   <script src="https://d3js.org/d3.v7.min.js"></script>
@@ -103,6 +107,85 @@
     .bc-item{font-size:.78rem;color:var(--text2);cursor:pointer;padding:3px 8px;border-radius:6px;background:var(--card);border:1px solid var(--border);transition:border-color var(--tr),color var(--tr);}
     .bc-item:hover{border-color:var(--accent);color:var(--accent);}
     .bc-sep{color:var(--text2);font-size:.78rem;}
+
+    /* ── Mobile / PWA ────────────────────────────────────────── */
+    @media (max-width: 768px) {
+      #topbar { padding: 0 12px; gap: 8px; height: 50px; }
+      #topbar h1 { font-size: 1rem; }
+      #search-input { width: 130px; font-size: .82rem; }
+      .tb-btn { padding: 5px 10px; font-size: .75rem; }
+      #lineage-btn { display: none; } /* moved to fab */
+
+      #main { flex-direction: column; }
+
+      /* Tree takes top portion */
+      #tree-container { flex: 0 0 55vh; border-bottom: 1px solid var(--border); }
+
+      /* Panel becomes bottom drawer */
+      #detail-panel {
+        width: 100% !important;
+        transform: translateY(100%) !important;
+        transition: transform var(--tr) !important;
+        border-left: none !important;
+        border-top: 1px solid var(--border);
+        position: fixed !important;
+        bottom: 0; left: 0; right: 0;
+        height: 48vh;
+        z-index: 50;
+        border-radius: 16px 16px 0 0;
+        box-shadow: 0 -4px 24px rgba(0,0,0,.15);
+      }
+      #detail-panel.open {
+        transform: translateY(0) !important;
+      }
+      /* Drawer handle */
+      #drawer-handle {
+        display: block;
+        width: 40px; height: 4px;
+        background: var(--border);
+        border-radius: 2px;
+        margin: 10px auto 0;
+      }
+      #panel-content { padding: 16px 20px 32px; }
+      #panel-close { top: 10px; right: 14px; }
+
+      /* Breadcrumb smaller */
+      #breadcrumb { top: 8px; left: 10px; }
+      .bc-item { font-size: .72rem; padding: 2px 6px; }
+
+      /* Zoom controls smaller */
+      #zoom-controls { bottom: calc(48vh + 12px); right: 12px; }
+      .zoom-btn { width: 32px; height: 32px; font-size: 1rem; }
+
+      /* Lineage FAB */
+      #lineage-fab {
+        display: flex;
+        position: fixed;
+        bottom: calc(48vh + 16px);
+        left: 16px;
+        z-index: 40;
+        background: var(--card);
+        border: 1.5px solid var(--border);
+        border-radius: 20px;
+        padding: 6px 12px;
+        font-size: .75rem;
+        font-weight: 500;
+        color: var(--text2);
+        cursor: pointer;
+        box-shadow: var(--shadow);
+        align-items: center;
+        gap: 6px;
+        transition: border-color var(--tr), color var(--tr);
+      }
+      #lineage-fab.active { border-color: var(--accent); color: var(--accent); }
+
+      /* Hide legend on mobile */
+      #legend { display: none; }
+    }
+    @media (min-width: 769px) {
+      #drawer-handle { display: none; }
+      #lineage-fab { display: none; }
+    }
   </style>
 </head>
 <body>
@@ -145,8 +228,10 @@
         <button class="zoom-btn" id="zoom-fit">⊙</button>
         <button class="zoom-btn" id="zoom-out">−</button>
       </div>
+    <button id="lineage-fab">🌿 Přímá linie</button>
     </div>
     <div id="detail-panel">
+      <div id="drawer-handle"></div>
       <button id="panel-close">✕</button>
       <div id="panel-content"></div>
     </div>
@@ -793,6 +878,60 @@ function openPanel(id) {
 }
 
 $panelClose.addEventListener("click", () => $panel.classList.remove("open"));
+
+
+// ── Mobile: swipe drawer down to close ────────────────────
+(function() {
+  const panel = document.getElementById("detail-panel");
+  let startY = 0, startScroll = 0;
+  panel.addEventListener("touchstart", e => {
+    startY = e.touches[0].clientY;
+    startScroll = panel.scrollTop;
+  }, { passive: true });
+  panel.addEventListener("touchmove", e => {
+    const dy = e.touches[0].clientY - startY;
+    if (dy > 40 && startScroll <= 0) {
+      panel.classList.remove("open");
+    }
+  }, { passive: true });
+})();
+
+// ── Mobile: lineage FAB ───────────────────────────────────
+const $lineageFab = document.getElementById("lineage-fab");
+if ($lineageFab) {
+  $lineageFab.addEventListener("click", () => {
+    lineageMode = !lineageMode;
+    const active = lineageMode;
+    $lineageFab.classList.toggle("active", active);
+    $lineageFab.textContent = active ? "🌿 Detail" : "🌿 Přímá linie";
+    $lineageBtn.style.borderColor = active ? "var(--accent)" : "";
+    $lineageBtn.style.color = active ? "var(--accent)" : "";
+    $lineageBtn.textContent = active ? "🌿 Zpět na detail" : "🌿 Přímá linie";
+    if (active) renderLineage();
+    else renderTree();
+  });
+}
+
+// ── Mobile: adjust zoom controls when drawer open/closed ──
+function adjustMobileLayout() {
+  if (window.innerWidth > 768) return;
+  const zoomCtrl = document.getElementById("zoom-controls");
+  const fab = document.getElementById("lineage-fab");
+  const panel = document.getElementById("detail-panel");
+  const isOpen = panel.classList.contains("open");
+  const drawerH = isOpen ? window.innerHeight * 0.48 : 0;
+  if (zoomCtrl) zoomCtrl.style.bottom = `${drawerH + 12}px`;
+  if (fab) fab.style.bottom = `${drawerH + 16}px`;
+}
+
+document.getElementById("detail-panel").addEventListener("transitionend", adjustMobileLayout);
+
+// ── PWA meta / viewport fix for Safari ───────────────────
+// Prevent double-tap zoom on SVG
+document.getElementById("tree-svg").addEventListener("touchend", e => {
+  e.preventDefault();
+}, { passive: false });
+
 </script>
 </body>
 </html>
